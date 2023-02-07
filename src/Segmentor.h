@@ -33,6 +33,8 @@ public:
 		std::string train_val_path, std::string image_type, std::string save_path);
 	void LoadWeight(std::string weight_path);
 	void Predict(cv::Mat& image, const std::string& which_class);
+	void Predict(cv::Mat& image, const std::vector<std::string>& class_list);
+	torch::jit::script::Module module;
 private:
 	int width = 512; int height = 512; std::vector<std::string> name_list;
 	torch::Device device = torch::Device(torch::kCPU);
@@ -40,6 +42,7 @@ private:
 	//    FPN fpn{nullptr};
 	//    UNet unet{nullptr};
 	Model model{ nullptr };
+	
 };
 
 template <class Model>
@@ -243,8 +246,67 @@ void Segmentor<Model>::Predict(cv::Mat& image, const std::string& which_class) {
 	output = torch::softmax(output, 1).mul(255.0).toType(torch::kByte);
 
 	image = cv::Mat::ones(cv::Size(width, height), CV_8UC1);
-
+    std::cout << "the shape of the output: " << output.sizes() << std::endl;
 	at::Tensor re = output[0][which_class_index].to(at::kCPU).detach();
+	memcpy(image.data, re.data_ptr(), width * height * sizeof(unsigned char));
+	cv::resize(image, image, cv::Size(image_width, image_height));
+
+	// draw the prediction
+	cv::imwrite("prediction.jpg", image);
+	cv::imshow("prediction", image);
+	cv::imshow("srcImage", srcImg);
+	cv::waitKey(0);
+	cv::destroyAllWindows();
+	return;
+}
+
+
+template <class Model>
+void Segmentor<Model>::Predict(cv::Mat& image, const std::vector<std::string>& class_list) {
+	cv::Mat srcImg = image.clone();
+	
+	at::Tensor class_index = at::ones({class_list.size(),}, at::kInt).mul(-1);
+	int which_class_index = -1;
+	for (int j = 0; j < class_list.size(); j++) {
+		bool find_flag = false;
+        for (int i = 0; i < name_list.size(); i++) {
+	    	if (name_list[i] == class_list[j]) {
+		    	class_index[j] = i;
+				find_flag = true;
+			    break;
+		    }
+	    }
+		if (!find_flag) std::cout<< class_list[j] + "not in the name list"; 
+	}
+	
+	int image_width = image.cols;
+	int image_height = image.rows;
+	cv::resize(image, image, cv::Size(width, height));
+	torch::Tensor tensor_image = torch::from_blob(image.data, { 1, height, width,3 }, torch::kByte);
+	tensor_image = tensor_image.to(device);
+	tensor_image = tensor_image.permute({ 0,3,1,2 });
+	tensor_image = tensor_image.to(torch::kFloat);
+	tensor_image = tensor_image.div(255.0);
+
+    at::Tensor output;
+	try
+	{
+		output = module.forward({ tensor_image }).toTensor();
+
+	}
+	catch (const std::exception& e)
+	{
+		std::cout << e.what();
+	}
+	// at::Tensor output = model->forward({ tensor_image });
+	output = torch::softmax(output, 1);
+
+	image = cv::Mat::ones(cv::Size(width, height), CV_8UC1);
+    std::cout << "the shape of the output: " << output.sizes() << std::endl;
+	at::Tensor re_classes = output[0].index({class_index.toType(torch::kLong)}).sum(0).clamp(0,1).mul(255.0).toType(torch::kByte);
+	std::cout << "the shape of the return: " << re_classes.sizes() << std::endl;
+	at::Tensor re = re_classes.to(at::kCPU).detach();
+
 	memcpy(image.data, re.data_ptr(), width * height * sizeof(unsigned char));
 	cv::resize(image, image, cv::Size(image_width, image_height));
 

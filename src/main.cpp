@@ -17,14 +17,50 @@ int main(int argc, char *argv[])
 	//output = output.to(at::kCPU);
 	//int64 t1 = cv::getCPUTickCount();
 	//std::cout << "execution time is " << (t1 - t0) / (double)cv::getTickFrequency() << " seconds" << std::endl;
-
+    std::vector<std::string> coco_name_list = {"BG", "person", "bicycle", "car", "motorcycle", "airplane",
+                            "bus", "train", "truck", "boat", "traffic light",
+                            "fire hydrant", "stop sign", "parking meter", "bench", "bird",
+                            "cat", "dog", "horse", "sheep", "cow", "elephant", "bear",
+                            "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie",
+                            "suitcase", "frisbee", "skis", "snowboard", "sports ball",
+                            "kite", "baseball bat", "baseball glove", "skateboard",
+                            "surfboard", "tennis racket", "bottle", "wine glass", "cup",
+                            "fork", "knife", "spoon", "bowl", "banana", "apple",
+                            "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza",
+                            "donut", "cake", "chair", "couch", "potted plant", "bed",
+                            "dining table", "toilet", "tv", "laptop", "mouse", "remote",
+                            "keyboard", "cell phone", "microwave", "oven", "toaster",
+                            "sink", "refrigerator", "book", "clock", "vase", "scissors",
+                            "teddy bear", "hair drier", "toothbrush"};
+	std::vector<std::string> voc_name_list = {"__background__", "aeroplane", "bicycle",
+							"bird","boat","bottle","bus","car","cat","chair","cow",
+							"diningtable","dog","horse","motorbike","person","pottedplant",
+							"sheep","sofa","train","tvmonitor"};
+	std::vector<std::string> coco_class_list = {"person", "bicycle", "car", "motorcycle", "airplane", 
+                                    "bus", "train", "truck", "boat", "bird", "cat", "dog", 
+                                    "horse", "sheep", "cow", "elephant", "bear", "zebra", 
+                                    "giraffe" };
+	std::vector<std::string> voc_class_list = {"bicycle", "bird", "car", "cat", "dog", "person"};
+	std::vector<std::string> person_class_list = {"person",};
     cv::Mat image = cv::imread("./voc_person_seg/val/2007_004000.jpg");
 
-    Segmentor<FPN> segmentor;
-    segmentor.Initialize(-1,512,512,{"background","person"},
-                         "resnet34","./weights/resnet34.pt");
-    segmentor.LoadWeight("./weights/segmentor.pt");
-    segmentor.Predict(image,"person");
+    torch::jit::script::Module module;
+    try {
+      // 使用以下命令从文件中反序列化脚本模块: torch::jit::load().
+      module = torch::jit::load("./weights/deeplabv3_resnet50.pt");
+    }
+    catch (const c10::Error& e) {
+      std::cerr << "error loading the model\n";
+      return -1;
+    }
+
+    Segmentor<DeepLabV3> segmentor;
+    segmentor.Initialize(-1,512,512, std::move(voc_name_list), //{"background","person"},
+                         "resnet50","./weights/resnet50.pt");
+    //segmentor.LoadWeight("./weights/deeplabv3_resnet50.pt");
+	segmentor.module = module;
+    //segmentor.Predict(image,"person");
+	segmentor.Predict(image, voc_class_list);
 
 	//trainTricks tricks;
 
