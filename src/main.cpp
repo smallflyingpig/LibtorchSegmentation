@@ -44,21 +44,10 @@ int main(int argc, char *argv[])
 	std::vector<std::string> person_class_list = {"person",};
     cv::Mat image = cv::imread("./voc_person_seg/val/2007_004000.jpg");
 
-    torch::jit::script::Module module;
-    try {
-      // 使用以下命令从文件中反序列化脚本模块: torch::jit::load().
-      module = torch::jit::load("./weights/deeplabv3_resnet50.pt");
-    }
-    catch (const c10::Error& e) {
-      std::cerr << "error loading the model\n";
-      return -1;
-    }
-
     Segmentor<DeepLabV3> segmentor;
-    segmentor.Initialize(-1,512,512, std::move(voc_name_list), //{"background","person"},
+    segmentor.Initialize(0,512,512, std::move(voc_name_list), //{"background","person"},
                          "resnet50","./weights/resnet50.pt");
-    //segmentor.LoadWeight("./weights/deeplabv3_resnet50.pt");
-	segmentor.module = module;
+    segmentor.LoadModule("./weights/deeplabv3_resnet50.pt");
     //segmentor.Predict(image,"person");
 	segmentor.Predict(image, voc_class_list);
 

@@ -32,9 +32,9 @@ public:
 	void Train(float learning_rate, int epochs, int batch_size,
 		std::string train_val_path, std::string image_type, std::string save_path);
 	void LoadWeight(std::string weight_path);
+    void LoadModule(std::string module_path);
 	void Predict(cv::Mat& image, const std::string& which_class);
 	void Predict(cv::Mat& image, const std::vector<std::string>& class_list);
-	torch::jit::script::Module module;
 private:
 	int width = 512; int height = 512; std::vector<std::string> name_list;
 	torch::Device device = torch::Device(torch::kCPU);
@@ -42,6 +42,7 @@ private:
 	//    FPN fpn{nullptr};
 	//    UNet unet{nullptr};
 	Model model{ nullptr };
+	torch::jit::script::Module module;
 	
 };
 
@@ -214,6 +215,18 @@ void Segmentor<Model>::LoadWeight(std::string weight_path) {
 }
 
 template <class Model>
+void Segmentor<Model>::LoadModule(std::string module_path) {
+    try {
+      // 使用以下命令从文件中反序列化脚本模块: torch::jit::load().
+      module = torch::jit::load("./weights/deeplabv3_resnet50.pt");
+	  module.to(device);
+    }
+    catch (const c10::Error& e) {
+      std::cerr << "error loading the model\n";
+    }
+}
+
+template <class Model>
 void Segmentor<Model>::Predict(cv::Mat& image, const std::string& which_class) {
 	cv::Mat srcImg = image.clone();
 	int which_class_index = -1;
@@ -292,7 +305,6 @@ void Segmentor<Model>::Predict(cv::Mat& image, const std::vector<std::string>& c
 	try
 	{
 		output = module.forward({ tensor_image }).toTensor();
-
 	}
 	catch (const std::exception& e)
 	{
